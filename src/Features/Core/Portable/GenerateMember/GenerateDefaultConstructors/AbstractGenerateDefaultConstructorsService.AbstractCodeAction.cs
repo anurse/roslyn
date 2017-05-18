@@ -1,5 +1,6 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -57,14 +58,33 @@ namespace Microsoft.CodeAnalysis.GenerateMember.GenerateDefaultConstructors
                     ? syntaxFactory.CreateArguments(constructor.Parameters)
                     : default(ImmutableArray<SyntaxNode>);
 
+                // Clean attributes off the parameters that are not visible in this context
+                var parameters = constructor.Parameters.Select(parameter =>
+                    (IParameterSymbol)new CodeGenerationParameterSymbol(
+                        parameter.ContainingType,
+                        FilterAttributes(_state, parameter.GetAttributes()),
+                        parameter.RefKind,
+                        parameter.IsParams,
+                        parameter.Type,
+                        parameter.Name,
+                        parameter.IsOptional,
+                        parameter.HasExplicitDefaultValue,
+                        parameter.HasExplicitDefaultValue ? parameter.ExplicitDefaultValue : null));
+
                 return CodeGenerationSymbolFactory.CreateConstructorSymbol(
                     attributes: default(ImmutableArray<AttributeData>),
                     accessibility: constructor.DeclaredAccessibility,
                     modifiers: new DeclarationModifiers(),
                     typeName: _state.ClassOrStructType.Name,
-                    parameters: constructor.Parameters,
+                    parameters: parameters.ToImmutableArray(),
                     statements: default(ImmutableArray<SyntaxNode>),
                     baseConstructorArguments: baseConstructorArguments);
+            }
+
+            private ImmutableArray<AttributeData> FilterAttributes(State state, ImmutableArray<AttributeData> attributes)
+            {
+                return attributes.Where(a => a.AttributeConstructor.IsAccessibleWithin(state.ClassOrStructType.ContainingAssembly, state.ClassOrStructType))
+                    .ToImmutableArray();
             }
         }
     }
